@@ -51,6 +51,8 @@ class Settings:
 
         temp_slam_url = app.config.get("SLAM_URL")
 
+        self.fed_reg_url = app.config.get("FED_REG_URL", None)
+        
         self.orchestrator_url = app.config["ORCHESTRATOR_URL"]
         self.orchestrator_conf = {
             "cmdb_url": app.config.get("CMDB_URL"),
@@ -58,4 +60,5 @@ class Settings:
             "im_url": app.config.get("IM_URL"),
             "monitoring_url": app.config.get("MONITORING_URL", ""),
             "vault_url": app.config.get("VAULT_URL"),
+            "fed_reg_url": self.fed_reg_url,
         }
