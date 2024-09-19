@@ -5,6 +5,7 @@ CA_BUNDLE_PATH=$(python3 -m certifi)
 CERT_PATH=${CERT_PATH:-"/trusted_certs"}
 CERT=${CERT:-"/certs/cert.pem"}
 KEY=${KEY:-"/certs/key.pem"}
+PORT=${PORT:-"5001"}
 
 if [ ! -d "${CERT_PATH}" ]; then
    echo "${CERT_PATH} does not exist. Nothing to do..."
@@ -29,11 +30,11 @@ fi
 
 if [ "${ENABLE_HTTPS}" == "True" ]; then
   if test -e "$CERT" && test -f "$KEY" ; then
-    exec gunicorn --bind 0.0.0.0:5001 -w "$WORKERS" --certfile "$CERT" --keyfile "$KEY" --timeout "$TIMEOUT"  orchdashboard:app
+    exec gunicorn --bind 0.0.0.0:$PORT -w "$WORKERS" --certfile "$CERT" --keyfile "$KEY" --timeout "$TIMEOUT"  orchdashboard:app
   else
     echo "[ERROR] File $CERT or $KEY NOT FOUND!"
     exit 1
   fi
 else
-  exec gunicorn --bind 0.0.0.0:5001 -w "$WORKERS" --timeout "$TIMEOUT"  orchdashboard:app
+  exec gunicorn --bind 0.0.0.0:$PORT -w "$WORKERS" --timeout "$TIMEOUT"  orchdashboard:app
 fi
