@@ -72,3 +72,4 @@ instance/
 .LSOverride
 
 certs/**
+trusted_certs/**
