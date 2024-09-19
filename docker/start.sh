@@ -3,6 +3,8 @@
 CA_BUNDLE_PATH=$(python3 -m certifi)
 
 CERT_PATH=${CERT_PATH:-"/trusted_certs"}
+TIMEOUT=${TIMEOUT:-"60"}
+WORKERS=${WORKERS:-"1"}
 CERT=${CERT:-"/certs/cert.pem"}
 KEY=${KEY:-"/certs/key.pem"}
 PORT=${PORT:-"5001"}
