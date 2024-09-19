@@ -12,14 +12,10 @@ RUN groupadd --gid $USER_GID $USERNAME \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-COPY . /app
-WORKDIR /app/
-
-ENV PYTHONPATH=/app
-
+COPY ./requirements.txt /app/requirements.txt
 RUN pip3 install gunicorn && pip install -r /app/requirements.txt
 
-
+COPY . /app
 RUN chown -R $USERNAME:$USERNAME /app
 
 COPY ./docker/start.sh /home/$USERNAME/.local/bin/start.sh
@@ -28,6 +24,9 @@ RUN chmod +x /home/$USERNAME/.local/bin/start.sh
 # Set the default user.
 USER $USERNAME
 
+WORKDIR /app/
+
+ENV PYTHONPATH=/app
 ENV PATH=$PATH:/home/$USERNAME/.local/bin
 ENV TIMEOUT 60
 ENV ENABLE_HTTPS False
