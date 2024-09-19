@@ -62,7 +62,8 @@ instance/
 .pyre/
 
 # VSCode
-.vscode
+.vscode/**
+!.vscode/launch.json
 .devcontainer
 
 # macOS
