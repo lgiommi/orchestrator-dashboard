@@ -6,15 +6,18 @@ services:
     ports:
       - 5001:5001
     volumes:
-      - "./instance/certs:/certs"  
-      - "./instance/trusted_certs:/trusted_certs"
-      - "./instance/config.json:/app/instance/config.json"  
-      - "./instance/vault-config.json:/app/instance/vault-config.json"
-        #- "./instance/s3-config.json:/app/instance/s3-config.json"        
-      - "./instance/uploads:/opt/uploads"
-      - "./instance/settings:/opt/settings"
+      - "../certs:/certs"
+      - "../trusted_certs:/trusted_certs"
+      - "../instance/docker-config.json:/app/instance/config.json"
+      - "../instance/uploads:/app/instance/uploads"
+      # - "../instance/tosca-templates:/app/instance/tosca-templates"
+      # - "../instance/dashboard-configuration:/app/instance/dashboard-configuration"
+      # - "../instance/vault-config.json:/app/instance/vault-config.json"
+      # - "../instance/s3-config.json:/app/instance/s3-config.json"        
     networks:
       - dev-network
+    environment:
+      - ENABLE_HTTPS=True
     depends_on:
       db:
         condition: service_healthy
@@ -41,7 +44,7 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p$MYSQL_ROOT_PASSWORD", "--silent"]
       interval: 5s
       timeout: 5s
-      retries: 10        
+      retries: 50        
 
   redis:
     image: redis:latest
