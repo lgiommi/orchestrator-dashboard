@@ -30,7 +30,7 @@ else
 fi  
 
 
-if [ "${ENABLE_HTTPS}" == "True" ]; then
+if [ "${ENABLE_HTTPS,}" == "true" ]; then
   if test -e "$CERT" && test -f "$KEY" ; then
     exec gunicorn --bind 0.0.0.0:$PORT -w "$WORKERS" --certfile "$CERT" --keyfile "$KEY" --timeout "$TIMEOUT"  orchdashboard:app
   else
