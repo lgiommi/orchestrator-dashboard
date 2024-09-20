@@ -19,7 +19,11 @@ COPY --chown=${USERNAME}:${USERNAME} ./requirements.txt /app/requirements.txt
 RUN pip3 install --user gunicorn \
     && pip install --user -r /app/requirements.txt
 
-COPY --chown=${USERNAME}:${USERNAME} . /app
+COPY --chown=${USERNAME}:${USERNAME} ./app /app/app
+COPY --chown=${USERNAME}:${USERNAME} ./config /app/config
+COPY --chown=${USERNAME}:${USERNAME} ./instance /app/instance
+COPY --chown=${USERNAME}:${USERNAME} ./migrations /app/migrations
+COPY --chown=${USERNAME}:${USERNAME} ./orchdashboard.py /app/orchdashboard.py
 COPY --chown=${USERNAME}:${USERNAME} ./docker/start.sh /home/${USERNAME}/.local/bin/start.sh
 
 WORKDIR /app/
