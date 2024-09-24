@@ -8,12 +8,7 @@ services:
     volumes:
       - "../certs:/certs"
       - "../trusted_certs:/trusted_certs"
-      - "../instance/docker-config.json:/app/instance/config.json"
-      - "../instance/uploads:/app/instance/uploads"
-      # - "../instance/tosca-templates:/app/instance/tosca-templates"
-      # - "../instance/dashboard-configuration:/app/instance/dashboard-configuration"
-      # - "../instance/vault-config.json:/app/instance/vault-config.json"
-      # - "../instance/s3-config.json:/app/instance/s3-config.json"        
+      - "../instance/:/app/instance/"
     networks:
       - dev-network
     environment:
