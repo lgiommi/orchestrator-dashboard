@@ -39,7 +39,7 @@ from werkzeug.exceptions import Forbidden
 
 from app.extensions import tosca, vaultservice
 from app.iam import iam
-from app.lib import auth, dbhelpers, s3, utils
+from app.lib import auth, dbhelpers, fed_reg, s3, utils
 from app.lib import openstack as keystone
 from app.lib import tosca_info as tosca_helpers
 from app.lib.ldap_user import LdapUserManager
@@ -683,12 +683,26 @@ def depupdate(depid=None):
     tosca_info["outputs"] = {**tosca_info["outputs"], **stoutputs}
 
     sla_id = tosca_helpers.getslapolicy(tosca_info)
-    slas = sla.get_slas(
-        access_token,
-        app.settings.orchestrator_conf["slam_url"],
-        app.settings.orchestrator_conf["cmdb_url"],
-        dep.deployment_type,
-    )
+
+    slas = []
+    # Fed-Reg
+    app.logger.debug("FED_REG_URL: {}".format(app.settings.fed_reg_url))
+    if app.settings.fed_reg_url is not None:
+        slas = fed_reg.retrieve_slas_from_specific_user_group(
+            access_token=access_token,
+            service_type="compute",
+            deployment_type=dep.deployment_type,
+        )
+
+    # SLAM
+    elif app.settings.orchestrator_conf("slam_url", None) is not None:
+        slas = sla.get_slas(
+            access_token,
+            app.settings.orchestrator_conf["slam_url"],
+            app.settings.orchestrator_conf["cmdb_url"],
+            dep.deployment_type,
+        )
+
     ssh_pub_key = dbhelpers.get_ssh_pub_key(session["userid"])
 
     return render_template(
@@ -896,12 +910,24 @@ def prepare_configure_form(selected_tosca, tosca_info, steps):
 
         sla_id = tosca_helpers.getslapolicy(template)
 
-        slas = sla.get_slas(
-            access_token,
-            app.settings.orchestrator_conf["slam_url"],
-            app.settings.orchestrator_conf["cmdb_url"],
-            template["deployment_type"],
-        )
+        slas = []
+        # Fed-Reg
+        app.logger.debug("FED_REG_URL: {}".format(app.settings.fed_reg_url))
+        if app.settings.fed_reg_url is not None:
+            slas = fed_reg.retrieve_slas_from_specific_user_group(
+                access_token=access_token,
+                service_type="compute",
+                deployment_type=template["deployment_type"],
+            )
+
+        # SLAM
+        elif app.settings.orchestrator_conf("slam_url", None) is not None:
+            slas = sla.get_slas(
+                access_token,
+                app.settings.orchestrator_conf["slam_url"],
+                app.settings.orchestrator_conf["cmdb_url"],
+                template["deployment_type"],
+            )
 
         ssh_pub_key = dbhelpers.get_ssh_pub_key(session["userid"])
 
