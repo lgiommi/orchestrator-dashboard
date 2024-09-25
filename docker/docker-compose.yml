@@ -2,9 +2,9 @@ version: '3.4'
 
 services:
   orchestratordashboard:
-    image: indigopaas/orchestrator-dashboard
+    image: giosava94/orchestrator-dashboard
     ports:
-      - 5001:5001
+      - 5000:5001
     volumes:
       - "../certs:/certs"
       - "../trusted_certs:/trusted_certs"
