@@ -64,7 +64,6 @@ instance/
 # VSCode
 .vscode/**
 !.vscode/launch.json
-.devcontainer
 
 # macOS
 .DS_Store
