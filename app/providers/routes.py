@@ -13,10 +13,17 @@
 # limitations under the License.
 
 import requests
-from flask import current_app as app, Blueprint, render_template, flash, request
+from flask import (
+    current_app as app,
+    Blueprint,
+    render_template,
+    flash,
+    request,
+    session,
+)
 from app.providers import sla
 from app.iam import iam
-from app.lib import auth
+from app.lib import auth, fed_reg
 
 
 providers_bp = Blueprint(
@@ -27,22 +34,65 @@ providers_bp = Blueprint(
 @providers_bp.route("/slas")
 @auth.authorized_with_valid_token
 def getslas():
-    slas = {}
+    slas = []
+    access_token = iam.token["access_token"]
 
-    try:
-        access_token = iam.token["access_token"]
-        app.logger.debug(
-            "SLAM_URL: {}".format(app.settings.orchestrator_conf["slam_url"])
-        )
-        slas = sla.get_slas(
-            access_token,
-            app.settings.orchestrator_conf["slam_url"],
-            app.settings.orchestrator_conf["cmdb_url"],
-        )
-        app.logger.debug("SLAs: {}".format(slas))
+    # Fed-Reg
+    app.logger.debug("FED_REG_URL: {}".format(app.settings.fed_reg_url))
+    if app.settings.fed_reg_url is not None:
+        # From session retrieve current user group and issuer
+        if "active_usergroup" in session and session["active_usergroup"] is not None:
+            user_group_name = session["active_usergroup"]
+        else:
+            user_group_name = session["organisation_name"]
+        issuer = session["iss"]
 
-    except Exception as e:
-        flash("Error retrieving SLAs list: \n" + str(e), "warning")
+        try:
+            # Retrieve target user group and related entities
+            user_groups = fed_reg.get_user_groups(
+                access_token=access_token,
+                name=user_group_name,
+                idp_endpoint=issuer,
+                with_conn=True,
+            )
+            assert len(user_groups) == 1, "Invalid number of returned user groups"
+            app.logger.debug("Retrieved user groups: {}".format(user_groups))
+
+            # Retrieve linked user group services
+            _slas = {}
+            _user_group = user_groups[0]
+            for _sla in _user_group["slas"]:
+                for _project in _sla["projects"]:
+                    _provider = _project["provider"]
+                    for _quota in _project["quotas"]:
+                        _service = _quota["service"]
+                        if _sla.get(_service["uid"], None) is None:
+                            _slas[_service["uid"]] = {
+                                "sitename": _provider["name"],
+                                "service_type": _service["name"],
+                                "endpoint": _service["endpoint"],
+                            }
+            slas = [i for i in _slas.values()]
+            app.logger.debug("Extracted services: {}".format(slas))
+
+        except Exception as e:
+            flash("Error retrieving user groups list: \n" + str(e), "warning")
+
+    # SLAM
+    elif app.settings.orchestrator_conf("slam_url", None) is not None:
+        try:
+            app.logger.debug(
+                "SLAM_URL: {}".format(app.settings.orchestrator_conf["slam_url"])
+            )
+            slas = sla.get_slas(
+                access_token,
+                app.settings.orchestrator_conf["slam_url"],
+                app.settings.orchestrator_conf["cmdb_url"],
+            )
+            app.logger.debug("SLAs: {}".format(slas))
+
+        except Exception as e:
+            flash("Error retrieving SLAs list: \n" + str(e), "warning")
 
     return render_template("sla.html", slas=slas)
 
@@ -73,7 +123,7 @@ def get_monitoring_info():
             monitoring_data = response.json()["result"]["groups"][0]["paasMachines"][0][
                 "services"
             ][0]["paasMetrics"]
-        except Exception as e:
+        except Exception:
             app.logger.debug("Error getting monitoring data")
 
     return render_template("monitoring_metrics.html", monitoring_data=monitoring_data)
