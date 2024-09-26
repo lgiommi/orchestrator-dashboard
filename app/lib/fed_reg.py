@@ -113,3 +113,4 @@ def retrieve_slas_from_specific_user_group(
 
     except Exception as e:
         flash("Error retrieving user groups list: \n" + str(e), "warning")
+        return []
