@@ -375,42 +375,75 @@ def get_openstack_connection(
 
     # Fed-Reg
     if app.settings.fed_reg_url is not None:
-        # TODO: add filters to filter target region only
-        # TODO: add filters to filter target identity provider only
-        # TODO: add filters to filter target user group only
+        # Older deployments saved as provider name both the provider name and the
+        # region, but in the Fed-Reg they are separate details.
+        if provider_name in ("BACKBONE-CNAF", "BACKBONE-BARI"):
+            provider_name, region_name = provider_name.split("-")
+            region_name = region_name.lower()
+
+        # Find target provider
         providers = fed_reg.get_providers(
             access_token=iam.token["access_token"],
             with_conn=True,
             name=provider_name,
             type=provider_type,
-            region_name=region_name,
-            idp_endpoint=session["iss"],
-            user_group_name=session["active_usergroup"],
         )
-        assert len(providers) == 0, "Invalid number of providers"
-        provider = providers[0]
         assert (
-            len(provider["identity_providers"]) == 0
-        ), "Invalid number of identity providers"
-        identity_provider = provider["identity_providers"][0]
-        assert len(provider["projects"]) == 0, "Invalid number of projects"
-        project = provider["projects"][0]
-        assert len(provider["regions"]) == 0, "Invalid number of regions"
-        region = provider["regions"][0]
-        identity_service = next(
-            filter(lambda x: x["type"] == "identity", region["services"])
+            len(providers) < 2
+        ), f"Found multiple providers with name '{provider_name}' and type '{provider_type}'"
+        assert (
+            len(providers) > 0
+        ), f"Provider with name '{provider_name}' and type '{provider_type}' not found"
+        provider = providers[0]
+
+        # Retrieve the authentication details matching the current identity provider
+        identity_provider = next(
+            filter(
+                lambda x: x["endpoint"] == session["iss"],
+                provider["identity_providers"],
+            )
         )
         auth_method = identity_provider["relationship"]
 
+        # Retrieve the auth_url matching the target region. In older deployments,
+        # if not inferred from the provider name, the region is None.
+        if region_name is not None:
+            region = next(
+                filter(lambda x: x["name"] == region_name, provider["regions"])
+            )
+        else:
+            region = provider["regions"][0]
+        identity_service = next(
+            filter(lambda x: x["type"] == "identity", region["services"])
+        )
+
+        # Retrieve user groups to get target project
+        user_group = next(
+            filter(
+                lambda x: x["name"] == session["active_usergroup"],
+                identity_provider["user_groups"],
+            )
+        )
+        projects = fed_reg.get_projects(
+            access_token=iam.token["access_token"],
+            with_conn=True,
+            provider_uid=provider["uid"],
+            user_group_uid=user_group["uid"],
+        )
+        assert len(projects) < 2, "Found multiple projects"
+        assert len(projects) > 0, "Projects not found"
+        project = projects[0]
+
+        # Create openstack connection
         conn = openstack.connect(
             auth=dict(
                 auth_url=identity_service["endpoint"],
                 project_id=project["uuid"],
                 protocol=auth_method["protocol"],
-                identity_provider=auth_method["name"],
+                identity_provider=auth_method["idp_name"],
                 access_token=iam.token["access_token"],
             ),
-            region_name=region["name"],
+            region_name=region_name,
             identity_api_version=3,
             auth_type="v3oidcaccesstoken",
         )
