@@ -6,9 +6,9 @@ import requests
 from flask import current_app as app, flash, session
 
 
-def get_user_groups(timeout: int = 60, *, access_token: str, **kwargs):
-    """Retrieve all user group details and related entities."""
-    url = os.path.join(app.settings.fed_reg_url, "user_groups")
+def get(*, access_token: str, entity: str, timeout: int = 60, **kwargs):
+    """Execute generic get on Fed-Reg."""
+    url = os.path.join(app.settings.fed_reg_url, entity)
     headers = {"Authorization": f"Bearer {access_token}"}
     params = {**kwargs}
 
@@ -20,6 +20,16 @@ def get_user_groups(timeout: int = 60, *, access_token: str, **kwargs):
     app.logger.debug("Retrieved user groups: {}".format(resp.json()))
 
     return resp.json()
+
+
+def get_providers(*, access_token: str, timeout: int = 60, **kwargs):
+    """Retrieve all providers details and related entities."""
+    return get(access_token=access_token, entity="providers", timeout=timeout, **kwargs)
+
+
+def get_user_groups(*, access_token: str, timeout: int = 60, **kwargs):
+    """Retrieve all user group details and related entities."""
+    return get(access_token=access_token, entity="user_groups", timeout=timeout, **kwargs)
 
 
 def deployment_supports_service(*, deployment_type: str, service_name: str):
