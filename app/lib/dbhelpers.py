@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import datetime
+from typing import Any, Optional
 
 from dateutil import parser
 from flask import current_app as app
@@ -88,8 +89,28 @@ def getdeploymenttype(dep):
                 deptype = "CLOUD"
             else:
                 deptype = etype
-
+        else:
+            iaas_type = endpoint.get("iaasType", "")
+            if iaas_type in ["OPENSTACK", "OPENNEBULA", "AWS", "OTC", "AZURE"]:
+                return "CLOUD"
+            return iaas_type
     return deptype
+
+
+def get_provider_type(dep: dict[str:Any]) -> Optional[str]:
+    """Return deployment's provider type if provided."""
+    endpoint = dep.get("cloudProviderEndpoint", None)
+    if endpoint is not None:
+        return endpoint.get("iaasType", None)
+    return None
+
+
+def get_deployment_region(dep: dict[str:Any]) -> Optional[str]:
+    """Return deployment's region if provided."""
+    endpoint = dep.get("cloudProviderEndpoint", None)
+    if endpoint is not None:
+        return endpoint.get("region", None)
+    return None
 
 
 def updatedeploymentsstatus(deployments, userid):
@@ -111,6 +132,8 @@ def updatedeploymentsstatus(deployments, userid):
         creation_time = datetime.datetime.strptime(dep_json["creationTime"], "%Y-%m-%d %H:%M:%S")
 
         providername = dep_json["cloudProviderName"] if "cloudProviderName" in dep_json else ""
+        provider_type = get_provider_type(dep_json)
+        region_name = get_deployment_region(dep_json)
         max_length = 65535
         status_reason = dep_json.get("statusReason", "")[:max_length]
 
@@ -122,6 +145,8 @@ def updatedeploymentsstatus(deployments, userid):
             if (
                 dep.status != dep_json["status"]
                 or dep.provider_name != providername
+                or dep.provider_type != provider_type
+                or dep.region_name != region_name
                 or str(dep.status_reason or "") != status_reason
             ):
                 dep.update_time = update_time
@@ -132,6 +157,8 @@ def updatedeploymentsstatus(deployments, userid):
                 dep.links = json.dumps(dep_json["links"])
                 dep.remote = 1
                 dep.provider_name = providername
+                dep.provider_type = provider_type
+                dep.region_name = region_name
                 dep.status_reason = status_reason
 
                 db.session.add(dep)
@@ -173,6 +200,8 @@ def updatedeploymentsstatus(deployments, userid):
                 params="",
                 deployment_type=getdeploymenttype(dep_json),
                 provider_name=providername,
+                provider_type=provider_type,
+                region_name=region_name,
                 user_group=dep_json.get("userGroup"),
                 endpoint=endpoint,
                 remote=1,
@@ -251,6 +280,8 @@ def cvdeployment(d):
         params=d.params,
         deployment_type=d.deployment_type,
         provider_name="" if d.provider_name is None else d.provider_name,
+        provider_type=d.provider_type,
+        region_name=d.region_name,
         user_group="" if d.user_group is None else d.user_group,
         endpoint=d.endpoint,
         remote=d.remote,

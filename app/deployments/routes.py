@@ -17,6 +17,7 @@ import io
 import os
 import random
 import string
+from typing import Optional
 import uuid as uuid_generator
 from re import search
 from urllib.parse import urlparse
@@ -362,32 +363,85 @@ def depinfradetails(depid=None):
 
 
 # PORTS MANAGEMENT
-def get_openstack_connection(endpoint, provider):
-    service = app.cmdb.get_service_by_endpoint(iam.token["access_token"], endpoint, provider, False)
+def get_openstack_connection(
+    *,
+    endpoint: str,
+    provider_name: str,
+    provider_type: Optional[str] = None,
+    region_name: Optional[str] = None,
+) -> openstack.connection.Connection:
+    """Create openstack connection, to target project, using access token."""
+    conn = None
 
-    prj, idp = app.cmdb.get_service_project(
-        iam.token["access_token"],
-        session["iss"],
-        service,
-        session["active_usergroup"],
-    )
-
-    if not prj or not idp:
-        raise Exception("Unable to get service/project information.")
-
-    # Create a connection using the access token
-    conn = openstack.connect(
-        auth=dict(
-            auth_url=service["endpoint"],
-            project_id=prj.get("tenant_id"),
-            protocol=idp["protocol"],
-            identity_provider=idp["name"],
+    # Fed-Reg
+    if app.settings.fed_reg_url is not None:
+        # TODO: add filters to filter target region only
+        # TODO: add filters to filter target identity provider only
+        # TODO: add filters to filter target user group only
+        providers = fed_reg.get_providers(
             access_token=iam.token["access_token"],
-        ),
-        region_name=service["region"],
-        identity_api_version=3,
-        auth_type="v3oidcaccesstoken",
-    )
+            with_conn=True,
+            name=provider_name,
+            type=provider_type,
+            region_name=region_name,
+            idp_endpoint=session["iss"],
+            user_group_name=session["active_usergroup"],
+        )
+        assert len(providers) == 0, "Invalid number of providers"
+        provider = providers[0]
+        assert (
+            len(provider["identity_providers"]) == 0
+        ), "Invalid number of identity providers"
+        identity_provider = provider["identity_providers"][0]
+        assert len(provider["projects"]) == 0, "Invalid number of projects"
+        project = provider["projects"][0]
+        assert len(provider["regions"]) == 0, "Invalid number of regions"
+        region = provider["regions"][0]
+        identity_service = next(
+            filter(lambda x: x["type"] == "identity", region["services"])
+        )
+        auth_method = identity_provider["relationship"]
+
+        conn = openstack.connect(
+            auth=dict(
+                auth_url=identity_service["endpoint"],
+                project_id=project["uuid"],
+                protocol=auth_method["protocol"],
+                identity_provider=auth_method["name"],
+                access_token=iam.token["access_token"],
+            ),
+            region_name=region["name"],
+            identity_api_version=3,
+            auth_type="v3oidcaccesstoken",
+        )
+    # SLAM
+    elif app.settings.orchestrator_conf("slam_url", None) is not None:
+        service = app.cmdb.get_service_by_endpoint(
+            iam.token["access_token"], endpoint, provider_name, False
+        )
+
+        prj, idp = app.cmdb.get_service_project(
+            iam.token["access_token"],
+            session["iss"],
+            service,
+            session["active_usergroup"],
+        )
+
+        if not prj or not idp:
+            raise Exception("Unable to get service/project information.")
+
+        conn = openstack.connect(
+            auth=dict(
+                auth_url=service["endpoint"],
+                project_id=prj.get("tenant_id"),
+                protocol=idp["protocol"],
+                identity_provider=idp["name"],
+                access_token=iam.token["access_token"],
+            ),
+            region_name=service["region"],
+            identity_api_version=3,
+            auth_type="v3oidcaccesstoken",
+        )
 
     return conn
 
@@ -416,7 +470,12 @@ def get_vm_info(depid):
         return "", ""
 
     vm_id, vm_endpoint = find_node_with_pubip(resources)
-    return {"vm_id": vm_id, "vm_endpoint": vm_endpoint}
+    return {
+        "vm_id": vm_id,
+        "vm_endpoint": vm_endpoint,
+        "vm_provider_type": dep.provider_type,
+        "vm_region": dep.region_name,
+    }
 
 
 def get_sec_groups(conn, server_id, public=True):
@@ -454,7 +513,12 @@ def security_groups(depid=None):
         vm_id = vm_info["vm_id"]
         vm_endpoint = vm_info["vm_endpoint"]
 
-        conn = get_openstack_connection(vm_endpoint, vm_provider)
+        conn = get_openstack_connection(
+            endpoint=vm_endpoint,
+            provider_name=vm_provider,
+            provider_type=vm_info["vm_provider_type"],
+            region_name=vm_info["vm_region"],
+        )
         sec_groups = get_sec_groups(conn, vm_id)
 
         if len(sec_groups) == 1:
@@ -478,7 +542,13 @@ def security_groups(depid=None):
 def manage_rules(depid=None, sec_group_id=None):
     provider = request.args.get("provider")
 
-    conn = get_openstack_connection(get_vm_info(depid)["vm_endpoint"], provider)
+    vm_info = get_vm_info(depid)
+    conn = get_openstack_connection(
+        endpoint=vm_info["vm_endpoint"],
+        provider_name=provider,
+        provider_type=vm_info["vm_provider_type"],
+        region_name=vm_info["vm_region"],
+    )
 
     rules = conn.list_security_groups({"id": sec_group_id})
 
@@ -496,8 +566,14 @@ def manage_rules(depid=None, sec_group_id=None):
 @auth.authorized_with_valid_token
 def create_rule(depid=None, sec_group_id=None):
     provider = request.args.get("provider")
+    vm_info = get_vm_info(depid)
     try:
-        conn = get_openstack_connection(get_vm_info(depid)["vm_endpoint"], provider)
+        conn = get_openstack_connection(
+            endpoint=vm_info["vm_endpoint"],
+            provider_name=provider,
+            provider_type=vm_info["vm_provider_type"],
+            region_name=vm_info["vm_region"],
+        )
         conn.network.create_security_group_rule(
             security_group_id=sec_group_id,
             description=request.form["input_description"],
@@ -531,9 +607,14 @@ def create_rule(depid=None, sec_group_id=None):
 @auth.authorized_with_valid_token
 def delete_rule(depid=None, sec_group_id=None, rule_id=None):
     provider = request.args.get("provider")
-
+    vm_info = get_vm_info(depid)
     try:
-        conn = get_openstack_connection(get_vm_info(depid)["vm_endpoint"], provider)
+        conn = get_openstack_connection(
+            endpoint=vm_info["vm_endpoint"],
+            provider_name=provider,
+            provider_type=vm_info["vm_provider_type"],
+            region_name=vm_info["vm_region"],
+        )
         conn.delete_security_group_rule(rule_id)
         flash("Port deleted successfully!", "success")
     except Exception as e:
