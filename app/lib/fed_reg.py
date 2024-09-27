@@ -11,11 +11,12 @@ def get(
     access_token: str,
     entity: str,
     uid: Optional[str] = None,
+    version: str = "v1",
     timeout: int = 60,
     **kwargs,
 ):
     """Execute generic get on Fed-Reg."""
-    url = os.path.join(app.settings.fed_reg_url, entity)
+    url = os.path.join(app.settings.fed_reg_url, version, entity)
     if uid is not None:
         url = os.path.join(url, uid)
 
