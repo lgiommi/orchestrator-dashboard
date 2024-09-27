@@ -99,7 +99,7 @@ def remap_slas_from_user_group(
                     )
                 ):
                     slas[service["uid"]] = {
-                        "id": provider["uid"],
+                        "id": sla["uid"],
                         "sitename": provider["name"],
                         "service_type": service["name"],
                         "endpoint": service["endpoint"],
