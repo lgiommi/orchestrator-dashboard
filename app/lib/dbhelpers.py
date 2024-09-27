@@ -132,8 +132,14 @@ def updatedeploymentsstatus(deployments, userid):
         creation_time = datetime.datetime.strptime(dep_json["creationTime"], "%Y-%m-%d %H:%M:%S")
 
         providername = dep_json["cloudProviderName"] if "cloudProviderName" in dep_json else ""
+        # Older deployments saved as provider name both the provider name and the
+        # region, but in the Fed-Reg they are separate details.
+        if providername in ("BACKBONE-CNAF", "BACKBONE-BARI"):
+            providername, region_name = providername.split("-")
+            region_name = region_name.lower()
+        else:
+            region_name = get_deployment_region(dep_json)        
         provider_type = get_provider_type(dep_json)
-        region_name = get_deployment_region(dep_json)
         max_length = 65535
         status_reason = dep_json.get("statusReason", "")[:max_length]
 

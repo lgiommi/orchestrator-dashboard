@@ -375,12 +375,6 @@ def get_openstack_connection(
 
     # Fed-Reg
     if app.settings.fed_reg_url is not None:
-        # Older deployments saved as provider name both the provider name and the
-        # region, but in the Fed-Reg they are separate details.
-        if provider_name in ("BACKBONE-CNAF", "BACKBONE-BARI"):
-            provider_name, region_name = provider_name.split("-")
-            region_name = region_name.lower()
-
         # Find target provider
         providers = fed_reg.get_providers(
             access_token=iam.token["access_token"],
