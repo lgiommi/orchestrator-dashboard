@@ -134,7 +134,7 @@ def updatedeploymentsstatus(deployments, userid):
         providername = dep_json["cloudProviderName"] if "cloudProviderName" in dep_json else ""
         # Older deployments saved as provider name both the provider name and the
         # region, but in the Fed-Reg they are separate details.
-        if providername in ("BACKBONE-CNAF", "BACKBONE-BARI"):
+        if providername in json.dumps(app.config.get("PROVIDER_NAMES_TO_SPLIT", [])):
             providername, region_name = providername.split("-")
             region_name = region_name.lower()
         else:
