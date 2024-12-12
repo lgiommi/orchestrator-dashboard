@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import ast
 import datetime
 from typing import Any, Optional
 
@@ -65,8 +66,11 @@ def update_deployment(depuuid, data):
     db.session.commit()
 
 
-def get_user_deployments(user_sub):
-    return Deployment.query.filter_by(sub=user_sub).all()
+def get_user_deployments(user_sub, user_group = None):
+    kwargs = {"sub": user_sub}
+    if user_group is not None:
+        kwargs["user_group"] = user_group
+    return Deployment.query.filter_by(**kwargs).all()
 
 
 def get_deployment(uuid):
@@ -134,7 +138,7 @@ def updatedeploymentsstatus(deployments, userid):
         providername = dep_json["cloudProviderName"] if "cloudProviderName" in dep_json else ""
         # Older deployments saved as provider name both the provider name and the
         # region, but in the Fed-Reg they are separate details.
-        if providername != "" and providername in json.dumps(
+        if providername != "" and providername in ast.literal_eval(
             app.config.get("PROVIDER_NAMES_TO_SPLIT", [])
         ):
             providername, region_name = providername.split("-")
@@ -185,7 +189,11 @@ def updatedeploymentsstatus(deployments, userid):
                 template = ""
 
             # insert missing deployment in database
-            endpoint = dep_json["outputs"]["endpoint"] if "endpoint" in dep_json["outputs"] else ""
+            endpoint = (
+                dep_json["outputs"]["endpoint"]
+                if "endpoint" in dep_json["outputs"]
+                else ""
+            )
 
             deployment = Deployment(
                 uuid=uuid,
@@ -237,7 +245,9 @@ def updatedeploymentsstatus(deployments, userid):
     for d in dd:
         uuid = d.uuid
         if uuid not in iids:
-            time_string = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            time_string = datetime.datetime.now(datetime.timezone.utc).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
             d.status = "DELETE_COMPLETE"
             d.update_time = time_string
             db.session.add(d)
@@ -276,8 +286,12 @@ def cvdeployment(d):
         else "",
         sub=d.sub,
         template=d.template,
-        template_parameters=d.template_parameters if d.template_parameters is not None else "",
-        template_metadata=d.template_metadata if d.template_metadata is not None else "",
+        template_parameters=d.template_parameters
+        if d.template_parameters is not None
+        else "",
+        template_metadata=d.template_metadata
+        if d.template_metadata is not None
+        else "",
         selected_template=d.selected_template,
         inputs=json.loads(d.inputs.replace("\n", "\\n"))
         if (d.inputs is not None and d.inputs != "")

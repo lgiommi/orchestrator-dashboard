@@ -19,8 +19,9 @@ The docker image uses [Gunicorn](https://gunicorn.org/) as WSGI HTTP server to s
 
 **The application requires a DB to store data and runs over HTTPS.**
 
-- Running MySQL instance with version 5.7 
+- Running MySQL instance with version 5.7 or 8
     - User with full db administration rights to auto create/manage the database
+- Running Redis instance
 - Register a client in IAM with the following properties:
     - redirect uri: `https://<DASHBOARD_HOST>:<PORT>/login/iam/authorized`
     - scopes: `openid`, `email`, `profile`, `offline_access`
@@ -96,6 +97,8 @@ If you want to run the application outside the docker image provided in the repo
     - In `config.json` file, set the `FEATURE_REQUIRE_USER_SSH_PUBKEY` equals to **yes**.
     - Enable vault (see next point).
 - **If you want to enable vault feature**
+    - If you have a vault service, it must be correctly configured. It must grant the correct read, write and delete policies to users. The name of these policies must match the name of the policies set in the `vault-config.json` variables.
+    - Il vault deve supportare l'autenticazione tramite JWT token.
     - In `config.json` file, set the `FEATURE_VAULT_INTEGRATION` equals to **yes**.
     - Create a `vault-config.json` file with at least: `VAULT_URL`, `VAULT_ROLE` and `VAULT_BOUND_AUDIENCE`.
 - **Use environemnt variable instead of defining variables in `.json` files**
@@ -115,8 +118,8 @@ If you want to run the application outside the docker image provided in the repo
 | IM_URL | IM service URL | no |
 | EXTERNAL_LINKS | Additional external links... | no |
 | SQLALCHEMY_DATABASE_URI | Complete URL to the database | yes |
-| REDIS_URL | Complete URL to the redis instance | no |
-| CALLBACK_URL | URL to return on login (**DEPRECATED** - The application works also without it) | no |
+| REDIS_URL | Complete URL to the redis instance. If not set the application tries to contact the localhost. | no |
+| CALLBACK_URL | URL contacted by the orchestrator to update the dashboard  | yes |
 | ADMINS | List of admin emails. Each email in the list must be written within single quotes. | no | 
 | SUPPORT_EMAIL | Email for user support | no |
 | IAM_GROUP_MEMBERSHIP | List of user's groups to use in the application. | no |
@@ -130,6 +133,7 @@ If you want to run the application outside the docker image provided in the repo
 | FEATURE_UPDATE_DEPLOYMENT | Enable update/remove advanced option when updating deployments (**DEPRECATED** - Related graphic is not up to date). | no |
 | FEATURE_VAULT_INTEGRATION | Enable vault integration. | no |
 | FEATURE_REQUIRE_USER_SSH_PUBKEY | Enable section to add user's SSH public key. _Depends on `FEATURE_VAULT_INTEGRATION` since SSH public keys are stored in the vault._ **This is mandatory to submit any deployment.** | no |
+| FEATURE_S3CREDS_MENU | Enable menu for S3 credentials creation. **DEPRECATED** | no |
 | PROVIDER_NAMES_TO_SPLIT | List of provider names to split in provider name and region name. | no |
 | MAIL_SERVER | SMTP server | no |
 | MAIL_PORT | SMTP server port | no |
@@ -142,6 +146,8 @@ If you want to run the application outside the docker image provided in the repo
 | LDAP_BASE | | no |
 | LDAP_BIND_USER | | no |
 | LDAP_BIND_PASSWORD | | no |
+
+Ldap variables are mandatory to run services like Sync&Share.
 
 ### `vault-config.json` values
 
@@ -287,36 +293,36 @@ topology_template:
 ## Using an HTTPS Proxy 
 
 Example of configuration for nginx:
+
 ```
 server {
-      listen         80;
-      server_name    YOUR_SERVER_NAME;
-      return         301 https://$server_name$request_uri;
+    listen         80;
+    server_name    YOUR_SERVER_NAME;
+    return         301 https://$server_name$request_uri;
 }
 
 server {
-  listen        443 ssl;
-  server_name   YOUR_SERVER_NAME;
-  access_log    /var/log/nginx/proxy-paas.access.log  combined;
+    listen        443 ssl;
+    server_name   YOUR_SERVER_NAME;
+    access_log    /var/log/nginx/proxy-paas.access.log  combined;
 
-  ssl on;
-  ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
-  ssl_certificate           /etc/nginx/cert.pem;
-  ssl_certificate_key       /etc/nginx/key.pem;
-  ssl_trusted_certificate   /etc/nginx/trusted_ca_cert.pem;
+    ssl on;
+    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+    ssl_certificate           /etc/nginx/cert.pem;
+    ssl_certificate_key       /etc/nginx/key.pem;
+    ssl_trusted_certificate   /etc/nginx/trusted_ca_cert.pem;
 
-  location / {
-                # Pass the request to Gunicorn
-                proxy_pass http://127.0.0.1:5001/;
+    location / {
+        # Pass the request to Gunicorn
+        proxy_pass http://127.0.0.1:5000/;
 
-                proxy_set_header        X-Real-IP $remote_addr;
-                proxy_set_header        X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header        X-Forwarded-Proto https;
-                proxy_set_header        Host $http_host;
-                proxy_redirect          http:// https://;
-                proxy_buffering         off;
-  }
-
+        proxy_set_header        X-Real-IP $remote_addr;
+        proxy_set_header        X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header        X-Forwarded-Proto https;
+        proxy_set_header        Host $http_host;
+        proxy_redirect          http:// https://;
+        proxy_buffering         off;
+    }
 }
 ```
 
